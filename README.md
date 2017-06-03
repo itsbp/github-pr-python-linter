@@ -44,7 +44,7 @@ optional arguments:
 2. Run container
    1. Providing Github access token in config.yaml and using that
 
-   `docker run -p 8080:8080 -v $CONFIG_DIR/config.yaml:/config.yaml -it github-pr-linter -f /config.yaml`
+   `docker run -p 8080:8080 -v $CONFIG_DIR/config.yaml:/config.yaml -it github-pr-python-linter -f /config.yaml`
    
    This will start HTTP server to listen for webook requests on port 8080
 
