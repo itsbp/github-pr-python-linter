@@ -1,0 +1,4 @@
+# add github access token here
+# Please see https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/ for details
+# Make sure you give 'admin:repo_hook' permission to token
+github_token: ""

@@ -1,0 +1,6 @@
+*.pyc
+sample/*.json
+config.yaml
+.idea/
+~
+.DS_Store
