@@ -22,10 +22,14 @@ optional arguments:
 ## Pre-Requisites:
 1. Generate a personal access token in Github
    
-2. Create a Webhook for Pull-requests (https://developer.github.com/webhooks/creating/)
-
-   When creating webhook for PayLoad URL please enter `http://<server_name>:8080/github-pr-handler`
+2. Create a Webhook for Pull-requests (https://developer.github.com/webhooks/creating/) with settings as :
+    1. Payload URL =  `http://<server_name>:8080/github-pr-handler`
    replace <server_name> with IP/Hostname where you will be running this utility
+   
+    2. Content Type = "application/json"
+    
+    3. Which events would you like to trigger this webhook? = Let me select individual events.
+       Make sure "Pull Request checkbox" is checked all other checkboxes should be unchecked
 
 #### Run Locally:
 1. Install required packages:

@@ -16,7 +16,7 @@ from pylint.reporters.text import ParseableTextReporter
 import yaml
 import os.path
 
-DEBUG_LEVEL = logging.INFO
+DEBUG_LEVEL = logging.DEBUG
 
 logger = logging.getLogger('github-pr-python-linter')
 logger.setLevel(DEBUG_LEVEL)
@@ -63,14 +63,25 @@ class GithubPRLinter(object):
     def init(self, webhook_json):
 
         assert (isinstance(webhook_json, dict))
+
+        if "hook" in webhook_json:
+            # don't do anything. This is just for webhook installation
+            return
+
         pull_request_details = webhook_json.get("pull_request")
+        self.pr_num = pull_request_details.get("number")
         if not pull_request_details:
             raise GitHubPRLinterException("Invalid pull request.")
+        state = pull_request_details.get("state")
+        if state == "closed":
+            # don't do antyhing
+            logger.info("PR# %d is closed.", self.pr_num)
+            return
         """
         Extract useful metadata from json which was submitted by webhook
         :return: 
         """
-        self.pr_num = pull_request_details.get("number")
+
         self.repo_url = webhook_json.get("repository", {}).get("url")
         self.commit_sha = pull_request_details.get("head", {}).get("sha")
         logger.debug("Linter initialized: PR# = {}, REPO_URL={}, COMMIT_SHA={}".format(self.pr_num, self.repo_url,
@@ -109,13 +120,31 @@ class GithubPRLinter(object):
         return files
 
     def run_checks(self):
+        files_errors = {}
         for file_info in self.files:
             raw_url = file_info.get("raw_url")
             file_name = file_info.get("filename")
             logger.debug("Running check for file=%s", file_name)
-            self._check_file_content(file_name, raw_url)
+            errors = self._check_file_content(file_name, raw_url)
+            if errors:
+                files_errors[file_name] = errors
+        if len(files_errors) > 0:
+            # atleast one file has error
+            self._add_pr_review_comment(self._get_formatted_error_msg(files_errors))
+
+
+    def _get_formatted_error_msg(self, files_errors):
+        error_body = ["This comment was added by automated lint checker.", "Syntax Error found in one or more files. Details:"]
+
+        for file_name, file_errors in files_errors.iteritems():
+            error_body.append("- File: **{}**:".format(file_name))
+            for err in file_errors:
+                error_body.append("  - [ ] Line# {} ```{}```".format(err['line'], err['body']))
+
+        return "\n".join(error_body)
 
     def _check_file_content(self, file_name, raw_url):
+        file_errors = None
         if file_name.endswith(".py"):
             logger.info("Checking file contents for file: %s", file_name)
             response = requests.get(raw_url, headers=self.__get_authorization_headers())
@@ -126,16 +155,7 @@ class GithubPRLinter(object):
                     temp.seek(0)
                     errors = self._run_pylint(temp.name)
                     if errors:
-                        github_comments = self._get_commit_comments_for_file_errors(file_name, errors)
-                        if len(github_comments) > 0:
-                            if self.add_comment_on_failure:
-                                logger.info("Found %d issues in file:%s", len(github_comments), file_name)
-                                self._add_pr_review_comment(
-                                    "Automated Pylint check failed: " + file_name,
-                                    github_comments
-                                )
-                            else:
-                                logger.info("Skipping adding PR comments for failed checks.")
+                        file_errors = self._get_comments_for_errors(file_name, errors)
                     else:
                         logger.info("Syntax check passed for file:%s", file_name)
                 finally:
@@ -145,7 +165,9 @@ class GithubPRLinter(object):
         else:
             logger.info("Skipping running pylint for non-python file:%s", file_name)
 
-    def _get_commit_comments_for_file_errors(self, file_path, errors):
+        return file_errors
+
+    def _get_comments_for_errors(self, file_path, errors):
         """
         Return github compatible commit comments
         Pyling error msg will be in format:
@@ -155,19 +177,19 @@ class GithubPRLinter(object):
         :param type: 
         :return: 
         """
-        github_comments = []
+        file_errors = []
         if errors and len(errors) > 0:
             for pylint_out in errors:
                 error_info = pylint_out.split("___")
                 if len(error_info) == 3:
                     # we have line, column and error
-                    github_comments.append({
+                    file_errors.append({
                         "path": file_path,
-                        "position": int(error_info[0]),
-                        "body": "Syntax Error:\n" + error_info[2]
+                        "line": int(error_info[0]),
+                        "body": error_info[2]
                     })
 
-        return github_comments
+        return file_errors
 
     def _run_pylint(self, file_path):
         logger.debug("Running pylint on file:%s", file_path)
@@ -185,20 +207,20 @@ class GithubPRLinter(object):
 
         return errors
 
-    def _add_pr_review_comment(self, body, comments):
+    def _add_pr_review_comment(self, body):
         post_url = "{}/pulls/{}/reviews".format(self.repo_url, self.pr_num)
         post_data = {
             "commit_id": self.commit_sha,
             "body": body,
-            "event": "REQUEST_CHANGES",
-            "comments": comments
+            "event": "REQUEST_CHANGES"
         }
+
+        logger.debug("Adding PR comment: %s", post_data)
         response = requests.post(post_url, json=post_data, headers=self.__get_authorization_headers())
-        if response.status_code:
+        if response.status_code == 200:
             logger.info("Succeffully added PR review comment for PR#%s", self.pr_num)
         else:
-            logger.info("Failed to add PR review comment. Error:%s", response.text)
-
+            logger.info("Failed to add PR review comment. Status Code=%d, Response:%s", response.status_code, response.text)
 
 class GitHubWebHookHandler(object):
     def __init__(self, github_access_token=None):
@@ -223,7 +245,7 @@ class GitHubWebHookHandler(object):
 
 
 def testRun(github_access_token=None):
-    with open('../sample/multi_commit_webhook_request.json') as f:
+    with open('../sample/pr_webhook_request.json') as f:
         pr_json = f.read()
         linter = GithubPRLinter(json.loads(pr_json), access_token=github_access_token)
         linter.run_checks()
@@ -277,4 +299,5 @@ if __name__ == '__main__':
     cherrypy.config.update({'server.socket_port': args.port,
                             'server.socket_host': '0.0.0.0'})
     logger.info("Starting HTTP listener on port=%d for Webhook requests", args.port)
-    cherrypy.quickstart(GitHubWebHookHandler(github_access_token=GITHUB_ACCESS_TOKEN))
+    #cherrypy.quickstart(GitHubWebHookHandler(github_access_token=GITHUB_ACCESS_TOKEN))
+    testRun(GITHUB_ACCESS_TOKEN)
