@@ -299,5 +299,5 @@ if __name__ == '__main__':
     cherrypy.config.update({'server.socket_port': args.port,
                             'server.socket_host': '0.0.0.0'})
     logger.info("Starting HTTP listener on port=%d for Webhook requests", args.port)
-    #cherrypy.quickstart(GitHubWebHookHandler(github_access_token=GITHUB_ACCESS_TOKEN))
-    testRun(GITHUB_ACCESS_TOKEN)
+    cherrypy.quickstart(GitHubWebHookHandler(github_access_token=GITHUB_ACCESS_TOKEN))
+    #testRun(GITHUB_ACCESS_TOKEN)
