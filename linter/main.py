@@ -132,9 +132,9 @@ class GithubPRLinter(object):
             # atleast one file has error
             self._add_pr_review_comment(self._get_formatted_error_msg(files_errors))
 
-
     def _get_formatted_error_msg(self, files_errors):
-        error_body = ["This comment was added by automated lint checker.", "Syntax Error found in one or more files. Details:"]
+        error_body = ["This comment was added by automated lint checker.",
+                      "Syntax Error found in one or more files. Details:"]
 
         for file_name, file_errors in files_errors.iteritems():
             error_body.append("- File: **{}**:".format(file_name))
@@ -220,7 +220,9 @@ class GithubPRLinter(object):
         if response.status_code == 200:
             logger.info("Succeffully added PR review comment for PR#%s", self.pr_num)
         else:
-            logger.info("Failed to add PR review comment. Status Code=%d, Response:%s", response.status_code, response.text)
+            logger.info("Failed to add PR review comment. Status Code=%d, Response:%s", response.status_code,
+                        response.text)
+
 
 class GitHubWebHookHandler(object):
     def __init__(self, github_access_token=None):
@@ -241,7 +243,6 @@ class GitHubWebHookHandler(object):
             cherrypy.response.headers["Status"] = "500"
             logger.exception("Failed to lint file.")
         return ret
-
 
 
 def testRun(github_access_token=None):
@@ -300,4 +301,4 @@ if __name__ == '__main__':
                             'server.socket_host': '0.0.0.0'})
     logger.info("Starting HTTP listener on port=%d for Webhook requests", args.port)
     cherrypy.quickstart(GitHubWebHookHandler(github_access_token=GITHUB_ACCESS_TOKEN))
-    #testRun(GITHUB_ACCESS_TOKEN)
+    # testRun(GITHUB_ACCESS_TOKEN)
