@@ -2,5 +2,6 @@
 sample/*.json
 config.yaml
 .idea/
+venv/
 ~
 .DS_Store
